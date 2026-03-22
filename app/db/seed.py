@@ -131,7 +131,7 @@ def seed_users(db: Session) -> None:
         },
         {
             "email": "user@example.com",
-            "password": "user123",
+            "password": "user1234",
             "last_name": "User",
             "first_name": "Regular",
             "middle_name": None,
