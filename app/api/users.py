@@ -6,19 +6,37 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.models import Session as UserSession
-from app.models import User
-from app.schemas.user import UpdateUserRequest, UserResponse
+from app.models import Role, Session as UserSession, User, UserRole
+from app.schemas.user import CurrentUserResponse, UpdateUserRequest, UserResponse
 
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=CurrentUserResponse)
 def get_me(
     current_user: User = Depends(get_current_user),
-) -> User:
-    return current_user
+    db: Session = Depends(get_db),
+) -> CurrentUserResponse:
+    role_ids = db.execute(
+        select(UserRole.role_id).where(UserRole.user_id == current_user.id)
+    ).scalars().all()
+    
+    roles = db.execute(
+        select(Role).where(Role.id.in_(role_ids))
+    ).scalars().all()
+    
+    role_names = [role.name for role in roles]
+    
+    return CurrentUserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        last_name=current_user.last_name,
+        first_name=current_user.first_name,
+        middle_name=current_user.middle_name,
+        status=current_user.status,
+        roles=role_names,
+    )
 
 
 @router.patch("/me", response_model=UserResponse)
