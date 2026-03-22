@@ -4,14 +4,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.models import Permission, RolePermission, User, UserRole
 from app.models import Session as UserSession
-from app.models import User
 
 
 bearer_scheme = HTTPBearer()
 
 
-def get_bearer_token(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)) -> str:
+def get_bearer_token(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+) -> str:
     if credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -52,3 +54,47 @@ def get_current_user(
         )
     
     return user
+
+
+def require_permission(resource: str, action: str):
+    def permission_checker(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> None:
+        user_role_ids = db.execute(
+            select(UserRole.role_id).where(UserRole.user_id == current_user.id)
+        ).scalars().all()
+
+        if not user_role_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions",
+            )
+            
+        permission = db.execute(
+            select(Permission).where(
+                Permission.resource == resource,
+                Permission.action == action,
+            )
+        ).scalar_one_or_none()
+        
+        if permission is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission is not configured",
+            )
+
+        role_permission = db.execute(
+            select(RolePermission).where(
+                RolePermission.role_id.in_(user_role_ids),
+                RolePermission.permission_id == permission.id,
+            )
+        ).scalar_one_or_none()
+        
+        if role_permission is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions",
+            )
+            
+    return permission_checker
