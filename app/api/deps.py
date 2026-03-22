@@ -89,7 +89,7 @@ def require_permission(resource: str, action: str):
                 RolePermission.role_id.in_(user_role_ids),
                 RolePermission.permission_id == permission.id,
             )
-        ).scalar_one_or_none()
+        ).scalars().first()
         
         if role_permission is None:
             raise HTTPException(
